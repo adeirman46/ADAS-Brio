@@ -25,8 +25,8 @@ void loop() {
   //     Serial.println("Input tidak valid. Masukkan sudut antara 0 hingga 180 derajat.");
   //   }
   // }
+  // myServo.write(90);
+  // delay(1000);
   myServo.write(90);
-  delay(1000);
-  myServo.write(0);
-  delay(1000);
+  // delay(1000);
 }
