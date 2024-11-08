@@ -68,6 +68,7 @@ void loop() {
     }
     rampingUp = false; // Switch direction
   } else {
+ 
     // Ramp down
     for (float out2Voltage = maxOut2; out2Voltage >= idleOut2; out2Voltage -= 0.01) {
       float out1Voltage = out2Voltage * 2; // Out1 is always 2 times Out2

@@ -11,18 +11,22 @@ void setup() {
 }
 
 void loop() {
-  if (Serial.available() > 0) {  // Mengecek apakah ada input dari serial
-    String input = Serial.readStringUntil('\n');  // Membaca input hingga newline
-    int angle = input.toInt();                    // Mengonversi input ke integer
+  // if (Serial.available() > 0) {  // Mengecek apakah ada input dari serial
+  //   String input = Serial.readStringUntil('\n');  // Membaca input hingga newline
+  //   int angle = input.toInt();                    // Mengonversi input ke integer
 
-    // Mengecek apakah sudut berada dalam rentang yang valid
-    if (angle >= 0 && angle <= 180) {
-      myServo.write(angle);                       // Menggerakkan servo ke sudut yang ditentukan
-      Serial.print("Servo bergerak ke ");
-      Serial.print(angle);
-      Serial.println(" derajat");
-    } else {
-      Serial.println("Input tidak valid. Masukkan sudut antara 0 hingga 180 derajat.");
-    }
-  }
+  //   // Mengecek apakah sudut berada dalam rentang yang valid
+  //   if (angle >= 0 && angle <= 180) {
+  //     myServo.write(angle);                       // Menggerakkan servo ke sudut yang ditentukan
+  //     Serial.print("Servo bergerak ke ");
+  //     Serial.print(angle);
+  //     Serial.println(" derajat");
+  //   } else {
+  //     Serial.println("Input tidak valid. Masukkan sudut antara 0 hingga 180 derajat.");
+  //   }
+  // }
+  myServo.write(90);
+  delay(1000);
+  myServo.write(0);
+  delay(1000);
 }
