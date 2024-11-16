@@ -1,16 +1,15 @@
 import serial
-import can
 import threading
 import time
-from fuzzy_braking import FuzzyBrakingSystem
+import struct
+from read_can import CANSpeedHandler
+from ctypes import sizeof
 
 class SerialHandler:
     MAX_BUFF_LEN = 255
-    MESSAGE_ID_RPM = 0x47
-    MESSAGE_ID_SPEED = 0x55
-    MESSAGE_ID_BRAKE = 0x21
-
+    
     def __init__(self, port, baudrate):
+        """Initialize serial communication and CAN interface"""
         self.port = serial.Serial(port, baudrate, timeout=0.1)
         self.speed = 0
         self.actual_brake = 0
@@ -18,154 +17,105 @@ class SerialHandler:
         self.desired_brake = 0
         self.brake_state = 0
         self.obstacle_distance = float('inf')
-        self.latitude = 0.0
-        self.longitude = 0.0
         self.running = False
         self.lock = threading.Lock()
         
-        self.fuzzy_braking = FuzzyBrakingSystem()
-        
+        # Initialize CAN speed handler
         try:
-            self.bus = can.interface.Bus(channel='can0', bustype='socketcan', receive_own_messages=False)
+            self.can_handler = CANSpeedHandler()
             self.can_connected = True
-            print("CAN bus connected successfully")
-        except (can.CanError, OSError) as e:
-            print(f"Failed to connect to CAN bus. Error: {e}. Running without CAN.")
+            print("CAN speed handler initialized successfully")
+        except Exception as e:
+            print(f"Failed to initialize CAN handler: {e}")
             self.can_connected = False
 
-    def write_ser(self, desired_velocity, desired_brake, actual_velocity, brake_state):
-        cmd = f'{desired_velocity},{desired_brake},{actual_velocity},{brake_state}\n'
+    def write_ser(self, desired_velocity, current_velocity):
+        """Write desired and current velocity to Arduino for PID control"""
         try:
-            self.port.write(cmd.encode())
+            # Pack float values into bytes
+            self.port.write(struct.pack('f', desired_velocity))
+            self.port.write(struct.pack('f', current_velocity))
         except serial.SerialException as e:
             print(f"Failed to write to serial port: {e}")
 
     def read_ser(self):
+        """Read throttle and brake outputs from Arduino"""
         try:
-            if self.port.in_waiting:
-                line = self.port.readline().decode().strip()
-                data = line.split(', ')
-                if len(data) >= 7:
-                    actual_brake = float(data[3].split(': ')[1])
-                    lat = float(data[5].split('=')[1])
-                    lon = float(data[6].split('=')[1])
-                    return actual_brake, lat, lon
-        except (ValueError, UnicodeDecodeError, IndexError, serial.SerialException) as e:
+            if self.port.in_waiting >= 2 * sizeof(float):
+                throttle_data = self.port.read(4)  # Read 4 bytes for float
+                brake_data = self.port.read(4)     # Read 4 bytes for float
+                
+                if len(throttle_data) == 4 and len(brake_data) == 4:
+                    throttle_percent = struct.unpack('f', throttle_data)[0]
+                    brake_percent = struct.unpack('f', brake_data)[0]
+                    return throttle_percent, brake_percent
+        except Exception as e:
             print(f"Error reading from serial port: {e}")
-        return None, None, None
-
-    def process_can_message(self, msg):
-        if msg.arbitration_id == self.MESSAGE_ID_SPEED:
-            third_byte_speed = msg.data[3]
-            with self.lock:
-                self.speed = int(0.2829 * third_byte_speed + 0.973)
-        elif msg.arbitration_id == self.MESSAGE_ID_BRAKE:
-            brake_flag = msg.data[0]
-            with self.lock:
-                self.brake_state = 1 if brake_flag == 0x60 else 0
+        return None, None
 
     def update_control(self):
+        """Update control outputs based on obstacle distance"""
         with self.lock:
             obstacle_distance = self.obstacle_distance
-            speed = self.speed
+            
+            # Simple distance-based speed control
+            if obstacle_distance <= 3.0:  # Emergency stop within 3m
+                self.desired_velocity = 0
+            else:
+                self.desired_velocity = 15
+            
+            # Read actual speed from CAN
+            if self.can_connected:
+                speed = self.can_handler.read_speed()
+                if speed is not None:
+                    self.speed = float(speed)  # Ensure proper type conversion
 
-        braking_signal = self.fuzzy_braking.get_braking_value(obstacle_distance, speed)
-        self.desired_brake = int(braking_signal * 200)
-
-        max_velocity = 40
-        min_velocity = 0
-        safe_distance = 10
-
-        if obstacle_distance > safe_distance:
-            self.desired_velocity = max_velocity
-        elif obstacle_distance > 0:
-            self.desired_velocity = int(min_velocity + (max_velocity - min_velocity) * (obstacle_distance / safe_distance))
-        else:
-            self.desired_velocity = min_velocity
-
-        self.write_ser(self.desired_velocity, self.desired_brake, speed, self.brake_state)
-
-        new_actual_brake, new_lat, new_lon = self.read_ser()
-        if new_actual_brake is not None:
-            self.actual_brake = new_actual_brake
-        if new_lat is not None and new_lon is not None:
-            self.latitude = new_lat
-            self.longitude = new_lon
-
-    def can_thread(self):
-        print("CAN thread started")
-        while self.running and self.can_connected:
-            try:
-                message = self.bus.recv(timeout=0.1)
-                if message:
-                    self.process_can_message(message)
-            except can.CanError as e:
-                print(f"CAN error: {e}")
-        print("CAN thread stopped")
+            # Send desired and current speed to Arduino for PID control
+            self.write_ser(self.desired_velocity, self.speed)
+            
+            # Read control outputs from Arduino
+            throttle, brake = self.read_ser()
+            if throttle is not None and brake is not None:
+                self.desired_brake = brake
+                self.actual_brake = brake  # For now, assuming actual matches desired
 
     def control_thread(self):
+        """Main control loop"""
         print("Control thread started")
         while self.running:
             self.update_control()
-            time.sleep(0.01)  # 10ms control loop
+            time.sleep(0.02)  # 50Hz to match Arduino's sample time
         print("Control thread stopped")
 
     def start(self):
-        print("Starting SerialHandler threads")
+        """Start the control thread"""
+        print("Starting SerialHandler thread")
         self.running = True
-        if self.can_connected:
-            self.can_thread = threading.Thread(target=self.can_thread)
-            self.can_thread.start()
         self.control_thread = threading.Thread(target=self.control_thread)
         self.control_thread.start()
 
     def stop(self):
-        print("Stopping SerialHandler threads")
+        """Stop the control thread and cleanup"""
+        print("Stopping SerialHandler thread")
         self.running = False
-        if hasattr(self, 'can_thread'):
-            self.can_thread.join()
         self.control_thread.join()
         self.port.close()
         if self.can_connected:
-            self.bus.shutdown()
-        print("SerialHandler threads stopped")
+            self.can_handler.close()
+        print("SerialHandler thread stopped")
 
     def update_obstacle_distance(self, distance):
+        """Update the current obstacle distance"""
         with self.lock:
             self.obstacle_distance = distance
 
     def get_status(self):
+        """Get current status of all variables"""
         with self.lock:
             return {
                 "speed": self.speed,
                 "actual_brake": self.actual_brake,
                 "desired_velocity": self.desired_velocity,
                 "desired_brake": self.desired_brake,
-                "brake_state": self.brake_state,
-                "obstacle_distance": self.obstacle_distance,
-                "latitude": self.latitude,
-                "longitude": self.longitude
+                "obstacle_distance": self.obstacle_distance
             }
-
-if __name__ == "__main__":
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Test SerialHandler")
-    parser.add_argument('--port', type=str, default='/dev/ttyUSB0', help='Serial port for communication')
-    parser.add_argument('--baudrate', type=int, default=115200, help='Baudrate for serial communication')
-    args = parser.parse_args()
-
-    handler = SerialHandler(args.port, args.baudrate)
-    
-    try:
-        handler.start()
-        print("SerialHandler started. Press Ctrl+C to stop.")
-        while True:
-            time.sleep(1)
-            status = handler.get_status()
-            print(f"Current status: {status}")
-    except KeyboardInterrupt:
-        print("Stopping SerialHandler...")
-    finally:
-        handler.stop()
-        print("SerialHandler stopped.")

@@ -45,7 +45,7 @@ class MainApplication:
 
         signal.signal(signal.SIGINT, self.signal_handler)
 
-        self.adas_active = False  # Default ADAS state is active
+        self.adas_active = True  # Default ADAS state is active
         
         # Initialize GUI
         self.app = QApplication(sys.argv)
@@ -87,13 +87,14 @@ class MainApplication:
                     self.process_frame()
 
                 self.app.processEvents()  # Allow GUI to update
-
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
+                
+                time.sleep(0.01)  # Add small delay to prevent CPU overuse
+                
         except KeyboardInterrupt:
             print("Keyboard interrupt detected. Cleaning up...")
         finally:
             self.cleanup()
+
 
     def cleanup(self):
         print("Cleaning up resources...")
@@ -122,7 +123,7 @@ class MainApplication:
         
         # Object detection
         detection_start = time.time()
-        results = self.detector.detect(frame_to_process)
+        results = self.detector.detect(bitwise_frame)
         detection_time = time.time() - detection_start
 
         # Post-processing and visualization
@@ -158,7 +159,7 @@ class MainApplication:
 
         # Final visualization
         visualization_start = time.time()
-        combined_img = frame_to_process.copy()
+        combined_img = bitwise_frame.copy()
         self.camera.retrieve_objects()
 
         for tracked_object in tracked_objects:
@@ -187,24 +188,18 @@ class MainApplication:
         else:
             effective_distance = min_bbox_distance
 
+    # Get status information including brake
         if self.serial_handler:
             self.serial_handler.update_obstacle_distance(effective_distance)
 
             status = self.serial_handler.get_status()
             desired_velocity = status['desired_velocity']
-            desired_brake = status['desired_brake']
             actual_velocity = status['speed']
-            actual_brake = status['actual_brake']
-            brake_state = status['brake_state']
+            actual_brake = status['actual_brake']  # Get brake status
         else:
             desired_velocity = 0
-            desired_brake = 0
             actual_velocity = 0
             actual_brake = 0
-            brake_state = 'N/A'
-
-        Visualizer.draw_distance_and_velocity(combined_img, effective_distance, desired_velocity, 
-                                              actual_velocity, actual_brake, desired_brake, brake_state)
         
         visualization_time = time.time() - visualization_start
 
@@ -212,30 +207,25 @@ class MainApplication:
         overall_end_time = time.time()
         overall_time = (overall_end_time - overall_start_time)
         fps = 1 / overall_time
-        cv2.putText(combined_img, f'FPS: {fps:.2f}', (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(combined_img, f'FPS: {fps:.2f}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         
-        # Display timing information
-        # cv2.putText(combined_img, f'Frame Retrieval: {frame_retrieval_time*1000:.2f}ms', (10, 210), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        # cv2.putText(combined_img, f'Preprocessing: {preprocess_time*1000:.2f}ms', (10, 230), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        # cv2.putText(combined_img, f'Detection: {detection_time*1000:.2f}ms', (10, 250), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        # cv2.putText(combined_img, f'Post-processing: {postprocess_time*1000:.2f}ms', (10, 270), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        # cv2.putText(combined_img, f'Tracking: {tracking_time*1000:.2f}ms', (10, 290), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        # cv2.putText(combined_img, f'Visualization: {visualization_time*1000:.2f}ms', (10, 310), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        # cv2.putText(combined_img, f'Total: {overall_time*1000:.2f}ms', (10, 330), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-
-        # Update GUI
-        self.gui.update_frame(combined_img, effective_distance, actual_velocity, 
-                              "Active" if brake_state == 1 else "Inactive", 
-                              self.adas_active)
+        # Update GUI with all status information including brake
+        self.gui.update_frame(
+            combined_img,
+            effective_distance,
+            actual_velocity,
+            actual_brake,  # Pass brake information to GUI
+            self.adas_active
+        )
         
         self.gui.update_plane(tracked_objects, depth_to_process)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ZED YOLOv8 Object Detection")
-    parser.add_argument('--model', type=str, default='/home/irman/Documents/FSD-Level-1-Jetson/vision_control/YOLOv8-multi-task/ultralytics/models/yolom4_50.pt', help='Path to the YOLOv8 model')
+    parser.add_argument('--model', type=str, default='/home/irman/Documents/ADAS-Brio/vision_control/YOLOv8-multi-task/ultralytics/all_files/best.pt', help='Path to the YOLOv8 model')
     parser.add_argument('--conf', type=float, default=0.3, help='Confidence threshold for object detection')
     parser.add_argument('--buffer_size', type=int, default=5, help='Size of the frame buffer')
-    parser.add_argument('--serial_port', type=str, default='/dev/ttyUSB0', help='Serial port for communication')
+    parser.add_argument('--serial_port', type=str, default='/dev/ttyACM2', help='Serial port for communication')
     parser.add_argument('--baudrate', type=int, default=115200, help='Baudrate for serial communication')
     args = parser.parse_args()
 

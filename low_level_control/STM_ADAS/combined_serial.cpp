@@ -5,10 +5,10 @@
 const int THROTTLE_OUT1 = D5;  // DAC1 (default resolution)
 const int THROTTLE_OUT2 = D6;  // DAC2 (default resolution)
 const int BRAKE_SERVO = D7;    // Servo for brake control
-const int EPS_RPWM = D9;       // Motor control forward PWM
-const int EPS_LPWM = D10;      // Motor control reverse PWM
-const int EPS_R_EN = D12;      // Motor enable pin
-const int EPS_L_EN = D13;      // Motor enable pin
+const int EPS_RPWM = D3;       // Motor control forward PWM
+const int EPS_LPWM = D11;      // Motor control reverse PWM
+const int EPS_R_EN = D8;      // Motor enable pin
+const int EPS_L_EN = D4;      // Motor enable pin
 
 // Throttle Variables
 const float idleOut1 = 1.0;  // 1V
@@ -22,7 +22,7 @@ float currentOut2 = idleOut2;
 // Brake Servo Variables
 Servo brakeServo;
 int brakeValue = 90;
-const int brakeStep = 8;
+const int brakeStep = 16;
 const int MIN_ANGLE = 90;
 const int MAX_ANGLE = 180;
 const int ANGLE_RANGE = MAX_ANGLE - MIN_ANGLE;

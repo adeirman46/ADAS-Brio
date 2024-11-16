@@ -6,7 +6,7 @@ class Visualizer:
     def draw_trapezoid(frame):
         """Draw a trapezoid on the frame to represent the region of interest."""
         height, width = frame.shape[:2]
-        top_width = int(width * 0.05)
+        top_width = int(width * 0.2)
         bottom_width = int(width * 0.5)
         top_x = (width - top_width) // 2
         bottom_x = (width - bottom_width) // 2
@@ -36,12 +36,23 @@ class Visualizer:
 
     @staticmethod
     def draw_segmentation(frame, mask, color_index):
-        """Draw segmentation mask on the frame."""
+        """
+        Draw segmentation mask on the frame using BDD dataset color format.
+        color_index: 0 for direct drivable area (red), 1 for alternative drivable area (purple)
+        """
         color_mask = np.zeros_like(frame)
+        
+        # BDD color scheme
         if color_index == 0:
-            color_mask[:, :, 1] = mask * 255  # Green for the first mask
+            # Direct drivable area - Red/Burgundy color (RGB: 128, 0, 50)
+            color_mask[:, :, 0] = mask * 128  # Blue channel
+            color_mask[:, :, 1] = mask * 0    # Green channel
+            color_mask[:, :, 2] = mask * 50   # Red channel
         elif color_index == 1:
-            color_mask[:, :, 2] = mask * 255  # Red for the second mask
+            # Alternative drivable area - Purple/Blue color (RGB: 110, 30, 120)
+            color_mask[:, :, 0] = mask * 110  # Blue channel
+            color_mask[:, :, 1] = mask * 30   # Green channel
+            color_mask[:, :, 2] = mask * 120  # Red channel
         
         mask_indices = np.where(mask > 0)
         if len(mask_indices[0]) > 0 and len(mask_indices[1]) > 0:
@@ -52,20 +63,48 @@ class Visualizer:
 
     @staticmethod
     def overlay_segmentation(frame, color_mask):
-        """Overlay segmentation mask on the frame."""
-        alpha = 0.5
-        frame[np.any(color_mask != 0, axis=-1)] = (1 - alpha) * frame[np.any(color_mask != 0, axis=-1)] + alpha * color_mask[np.any(color_mask != 0, axis=-1)]
-        return frame
+        """Overlay segmentation mask on the frame with BDD-style transparency."""
+        try:
+            # Ensure both arrays have the same shape
+            if frame.shape != color_mask.shape:
+                color_mask = cv2.resize(color_mask, (frame.shape[1], frame.shape[0]))
+
+            # Create a mask of non-zero pixels
+            mask_area = np.any(color_mask != 0, axis=-1)
+            
+            # Only process if there are pixels to overlay
+            if np.any(mask_area):
+                alpha = 0.5  # Increased opacity to match BDD style
+                
+                # Extract the regions to blend
+                frame_region = frame[mask_area]
+                mask_region = color_mask[mask_area]
+                
+                # Ensure the regions are properly shaped for addWeighted
+                if len(frame_region.shape) == 1:
+                    frame_region = frame_region.reshape(-1, 3)
+                if len(mask_region.shape) == 1:
+                    mask_region = mask_region.reshape(-1, 3)
+                
+                # Perform the blending
+                blended = cv2.addWeighted(frame_region, 1 - alpha, mask_region, alpha, 0)
+                
+                # Update the original frame
+                frame[mask_area] = blended
+            
+            return frame
+            
+        except Exception as e:
+            print(f"Error in overlay_segmentation: {e}")
+            return frame  # Return original frame if there's an error
 
     @staticmethod
     def draw_distance_and_velocity(frame, distance, velocity, actual_velocity, actual_brake, desired_brake, state_brake):
         """Draw distance and velocity information on the frame."""
-        # cv2.putText(frame, f'Distance: {distance:.2f}m', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         cv2.putText(frame, f'Desired Velocity: {velocity:.2f}km/h', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        # cv2.putText(frame, f'Actual Velocity: {actual_velocity:.2f}km/h', (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         cv2.putText(frame, f'Desired Brake: {desired_brake:.2f}', (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         cv2.putText(frame, f'Actual Brake: {actual_brake:.2f}', (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        # cv2.putText(frame, f'State Brake: {state_brake}', (10, 360), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
 
     @staticmethod
     def create_2d_plane(tracked_objects, depth_map, max_length=15, max_width=5, plane_size=(400, 400)):
