@@ -159,7 +159,7 @@ class MainApplication:
 
         # Final visualization
         visualization_start = time.time()
-        combined_img = bitwise_frame.copy()
+        combined_img = frame_to_process.copy()
         self.camera.retrieve_objects()
 
         for tracked_object in tracked_objects:

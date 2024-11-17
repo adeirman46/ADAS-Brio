@@ -4,21 +4,35 @@ import numpy as np
 class Visualizer:
     @staticmethod
     def draw_trapezoid(frame):
-        """Draw a trapezoid on the frame to represent the region of interest."""
+        """Draw a rectangular region of interest in front of the car view."""
         height, width = frame.shape[:2]
-        top_width = int(width * 0.2)
-        bottom_width = int(width * 0.5)
-        top_x = (width - top_width) // 2
-        bottom_x = (width - bottom_width) // 2
+        
+        # Define rectangle dimensions
+        # Rectangle will be in the lower center portion of the frame
+        rect_width = int(width * 0.3)  # 30% of frame width
+        rect_height = int(height * 0.6)  # 60% of frame height
+        
+        # Calculate rectangle position
+        # Centered horizontally, aligned to bottom of frame
+        rect_x = (width - rect_width) // 2  # Center horizontally
+        rect_y = height - rect_height  # Start from bottom
+        
+        # Create points for rectangle
         points = np.array([
-            [top_x, 0],
-            [top_x + top_width, 0],
-            [bottom_x + bottom_width, height],
-            [bottom_x, height]
+            [rect_x, rect_y],  # Top left
+            [rect_x + rect_width, rect_y],  # Top right
+            [rect_x + rect_width, height],  # Bottom right
+            [rect_x, height]  # Bottom left
         ], np.int32)
+        
+        # Reshape points for fillConvexPoly
         points = points.reshape((-1, 1, 2))
+        
+        # Create mask and fill rectangle
         mask = np.zeros_like(frame)
         cv2.fillConvexPoly(mask, points, (255, 255, 255))
+        
+        # Apply mask to frame
         return cv2.bitwise_and(frame, mask)
 
     @staticmethod
@@ -37,66 +51,79 @@ class Visualizer:
     @staticmethod
     def draw_segmentation(frame, mask, color_index):
         """
-        Draw segmentation mask on the frame using BDD dataset color format.
+        Draw segmentation mask on the frame using BDD dataset color format with optimized performance.
         color_index: 0 for direct drivable area (red), 1 for alternative drivable area (purple)
         """
-        color_mask = np.zeros_like(frame)
+        # Downsample mask for faster processing
+        scale_factor = 3
+        small_height, small_width = mask.shape[0] // scale_factor, mask.shape[1] // scale_factor
+        small_mask = cv2.resize(mask, (small_width, small_height), interpolation=cv2.INTER_NEAREST)
         
-        # BDD color scheme
+        # Create small color mask
+        small_color_mask = np.zeros((small_height, small_width, 3), dtype=np.uint8)
+        
+        # BDD color scheme - apply to small mask
         if color_index == 0:
-            # Direct drivable area - Red/Burgundy color (RGB: 128, 0, 50)
-            color_mask[:, :, 0] = mask * 128  # Blue channel
-            color_mask[:, :, 1] = mask * 0    # Green channel
-            color_mask[:, :, 2] = mask * 50   # Red channel
+            # Blue
+            small_color_mask[small_mask > 0] = [117, 173, 185]  # [R, G, B]
         elif color_index == 1:
-            # Alternative drivable area - Purple/Blue color (RGB: 110, 30, 120)
-            color_mask[:, :, 0] = mask * 110  # Blue channel
-            color_mask[:, :, 1] = mask * 30   # Green channel
-            color_mask[:, :, 2] = mask * 120  # Red channel
+            # Red
+            small_color_mask[small_mask > 0] = [63, 108, 125]  # [R, G, B]
         
-        mask_indices = np.where(mask > 0)
+        # Calculate centroid on small mask for efficiency
+        mask_indices = np.where(small_mask > 0)
         if len(mask_indices[0]) > 0 and len(mask_indices[1]) > 0:
-            cx = int(np.mean(mask_indices[1]))
-            cy = int(np.mean(mask_indices[0]))
+            cx = int(np.mean(mask_indices[1])) * scale_factor  # Scale back to original size
+            cy = int(np.mean(mask_indices[0])) * scale_factor  # Scale back to original size
+            
+            # Resize color mask to original size
+            color_mask = cv2.resize(small_color_mask, (frame.shape[1], frame.shape[0]), 
+                                  interpolation=cv2.INTER_LINEAR)
             return color_mask, cx, cy
+            
+        # If no mask indices found
+        color_mask = cv2.resize(small_color_mask, (frame.shape[1], frame.shape[0]), 
+                              interpolation=cv2.INTER_LINEAR)
         return color_mask, None, None
 
     @staticmethod
     def overlay_segmentation(frame, color_mask):
-        """Overlay segmentation mask on the frame with BDD-style transparency."""
+        """Optimized overlay segmentation mask on the frame with BDD-style transparency."""
         try:
-            # Ensure both arrays have the same shape
-            if frame.shape != color_mask.shape:
-                color_mask = cv2.resize(color_mask, (frame.shape[1], frame.shape[0]))
+            # Downscale for faster processing
+            scale_factor = 3
+            small_frame = cv2.resize(frame, (frame.shape[1] // scale_factor, frame.shape[0] // scale_factor), 
+                                   interpolation=cv2.INTER_LINEAR)
+            small_color_mask = cv2.resize(color_mask, (frame.shape[1] // scale_factor, frame.shape[0] // scale_factor), 
+                                        interpolation=cv2.INTER_LINEAR)
 
-            # Create a mask of non-zero pixels
-            mask_area = np.any(color_mask != 0, axis=-1)
+            # Create mask of non-zero pixels in small version
+            small_mask_area = np.any(small_color_mask != 0, axis=-1)
             
             # Only process if there are pixels to overlay
-            if np.any(mask_area):
-                alpha = 0.5  # Increased opacity to match BDD style
+            if np.any(small_mask_area):
+                alpha = 1  # Opacity
                 
-                # Extract the regions to blend
-                frame_region = frame[mask_area]
-                mask_region = color_mask[mask_area]
+                # Process blending on smaller images
+                small_result = small_frame.copy()
+                small_result[small_mask_area] = cv2.addWeighted(
+                    small_frame[small_mask_area], 
+                    1 - alpha,
+                    small_color_mask[small_mask_area], 
+                    alpha, 
+                    0
+                )
                 
-                # Ensure the regions are properly shaped for addWeighted
-                if len(frame_region.shape) == 1:
-                    frame_region = frame_region.reshape(-1, 3)
-                if len(mask_region.shape) == 1:
-                    mask_region = mask_region.reshape(-1, 3)
-                
-                # Perform the blending
-                blended = cv2.addWeighted(frame_region, 1 - alpha, mask_region, alpha, 0)
-                
-                # Update the original frame
-                frame[mask_area] = blended
+                # Resize result back to original size
+                result = cv2.resize(small_result, (frame.shape[1], frame.shape[0]), 
+                                  interpolation=cv2.INTER_LINEAR)
+                return result
             
             return frame
             
         except Exception as e:
             print(f"Error in overlay_segmentation: {e}")
-            return frame  # Return original frame if there's an error
+            return frame
 
     @staticmethod
     def draw_distance_and_velocity(frame, distance, velocity, actual_velocity, actual_brake, desired_brake, state_brake):
