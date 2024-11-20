@@ -20,7 +20,7 @@ class MainApplication:
     def __init__(self, args):
         self.camera = ZEDCamera()
         self.detector = ObjectDetector(args.model, args.conf)
-        self.sort_tracker = Sort(max_age=10, min_hits=3, iou_threshold=0.3)
+        self.sort_tracker = Sort(max_age=10, min_hits=3, iou_threshold=0.45)
         self.frame_buffer = deque(maxlen=args.buffer_size)
         self.plane_size = (800, 800)
         
@@ -223,10 +223,10 @@ class MainApplication:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ZED YOLOv8 Object Detection")
     parser.add_argument('--model', type=str, default='/home/irman/Documents/ADAS-Brio/vision_control/YOLOv8-multi-task/ultralytics/all_files/best.pt', help='Path to the YOLOv8 model')
-    parser.add_argument('--conf', type=float, default=0.3, help='Confidence threshold for object detection')
+    parser.add_argument('--conf', type=float, default=0.7, help='Confidence threshold for object detection')
     parser.add_argument('--buffer_size', type=int, default=5, help='Size of the frame buffer')
-    parser.add_argument('--serial_port', type=str, default='/dev/ttyACM2', help='Serial port for communication')
-    parser.add_argument('--baudrate', type=int, default=115200, help='Baudrate for serial communication')
+    parser.add_argument('--serial_port', type=str, default='/dev/ttyACM0', help='Serial port for communication')
+    parser.add_argument('--baudrate', type=int, default=9600, help='Baudrate for serial communication')
     args = parser.parse_args()
 
     app = MainApplication(args)
