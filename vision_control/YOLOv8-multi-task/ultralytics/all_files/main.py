@@ -20,7 +20,7 @@ class MainApplication:
     def __init__(self, args):
         self.camera = ZEDCamera()
         self.detector = ObjectDetector(args.model, args.conf)
-        self.sort_tracker = Sort(max_age=10, min_hits=3, iou_threshold=0.45)
+        self.sort_tracker = Sort(max_age=15, min_hits=5, iou_threshold=0.45)
         self.frame_buffer = deque(maxlen=args.buffer_size)
         self.plane_size = (800, 800)
         

@@ -284,7 +284,7 @@ class MainApplication:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ZED YOLOv8 Object Detection")
-    parser.add_argument('--model', type=str, default='best.pt', help='Path to the YOLOv8 model')
+    parser.add_argument('--model', type=str, default='../../best.pt', help='Path to the YOLOv8 model')
     parser.add_argument('--conf', type=float, default=0.7, help='Confidence threshold for object detection')
     parser.add_argument('--buffer_size', type=int, default=5, help='Size of the frame buffer')
     args = parser.parse_args()

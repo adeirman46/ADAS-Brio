@@ -40,3 +40,11 @@ psutil  # system utilization
 # albumentations>=1.0.3
 # pycocotools>=2.0.6  # COCO mAP
 # roboflow
+scikit-image
+filterpy
+# conda install -c conda-forge gcc=12.1.0
+pyserial
+PyQt6
+PyQt6-WebEngine
+
+
