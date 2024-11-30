@@ -10,6 +10,7 @@ from sort import Sort
 from ultralytics import YOLO
 import socket
 import struct
+import pickle
 
 class ZEDCamera:
     def __init__(self):
@@ -250,6 +251,44 @@ class MainApplication:
         except Exception as e:
             print(f"Error sending data to GUI: {e}")
 
+    def send_tracked_objects(self, tracked_objects, depth_map):
+        """Send tracked objects data to GUI for plane visualization."""
+        try:
+            # Create new UDP socket for tracked objects if not exists
+            if not hasattr(self, 'tracked_objects_socket'):
+                self.tracked_objects_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                self.tracked_objects_address = ('localhost', 12349)  # New port for tracked objects
+
+            # Convert tracked objects to bytes
+            tracked_objects_data = []
+            for obj in tracked_objects:
+                x1, y1, x2, y2, track_id = obj
+                # Calculate center point
+                cx = int((x1 + x2) // 2)
+                cy = int(y2)  # Use bottom center point
+                
+                if 0 <= cx < depth_map.get_width() and 0 <= cy < depth_map.get_height():
+                    depth = depth_map.get_value(cx, cy)[1]
+                    if np.isfinite(depth):
+                        tracked_objects_data.append([cx, cy, depth, track_id])
+
+            # Convert to numpy array and then to bytes
+            data_array = np.array(tracked_objects_data, dtype=np.float32)
+            data_bytes = data_array.tobytes()
+
+            # Send size first
+            size_bytes = struct.pack('I', len(data_bytes))
+            self.tracked_objects_socket.sendto(size_bytes, self.tracked_objects_address)
+
+            # Send data in chunks
+            chunk_size = 8192
+            for i in range(0, len(data_bytes), chunk_size):
+                chunk = data_bytes[i:i + chunk_size]
+                self.tracked_objects_socket.sendto(chunk, self.tracked_objects_address)
+
+        except Exception as e:
+            print(f"Error sending tracked objects: {e}")
+
     def process_frame(self):
         # Frame retrieval and preprocessing
         frame_to_process, depth_to_process = self.frame_buffer.popleft()
@@ -338,6 +377,7 @@ class MainApplication:
 
         # Send data to GUI
         self.send_to_gui(combined_img, effective_distance)
+        self.send_tracked_objects(tracked_objects, depth_to_process)
 
         # Calculate FPS
         current_time = time.time()
@@ -348,6 +388,8 @@ class MainApplication:
         self.socket.close()
         self.gui_socket.close()  # Close GUI socket
         self.camera.close()
+        if hasattr(self, 'tracked_objects_socket'):
+            self.tracked_objects_socket.close()
         cv2.destroyAllWindows()
 
 if __name__ == "__main__":

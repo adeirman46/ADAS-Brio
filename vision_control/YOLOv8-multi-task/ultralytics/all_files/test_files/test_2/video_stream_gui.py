@@ -56,6 +56,11 @@ class VideoStreamGUI(QMainWindow):
         self.distance_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.distance_socket.bind(('localhost', 12348))
         self.distance_socket.settimeout(0.1)
+
+        # Add socket for tracked objects
+        self.tracked_objects_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.tracked_objects_socket.bind(('localhost', 12349))
+        self.tracked_objects_socket.settimeout(0.1)
         
         # Flag for thread control
         self.running = True
@@ -183,6 +188,11 @@ class VideoStreamGUI(QMainWindow):
         self.distance_thread.daemon = True
         self.distance_thread.start()
 
+        # Add thread for tracked objects
+        self.tracked_objects_thread = Thread(target=self.receive_tracked_objects)
+        self.tracked_objects_thread.daemon = True
+        self.tracked_objects_thread.start()
+
     def receive_control_data(self):
         """Receive speed and brake data from MIMO controller."""
         while self.running:
@@ -198,6 +208,34 @@ class VideoStreamGUI(QMainWindow):
                 continue
             except Exception as e:
                 print(f"Error receiving control data: {e}")
+
+    def receive_tracked_objects(self):
+        """Receive tracked objects data for plane visualization."""
+        while self.running:
+            try:
+                # Receive data size first
+                size_data, _ = self.tracked_objects_socket.recvfrom(1024)
+                data_size = struct.unpack('I', size_data)[0]
+
+                # Receive tracked objects data
+                data = b''
+                while len(data) < data_size:
+                    chunk, _ = self.tracked_objects_socket.recvfrom(8192)
+                    data += chunk
+
+                # Convert bytes back to numpy array
+                tracked_objects = np.frombuffer(data, dtype=np.float32)
+                tracked_objects = tracked_objects.reshape(-1, 4)  # [cx, cy, depth, track_id]
+
+                # Update plane visualization in thread-safe way
+                QMetaObject.invokeMethod(self, "update_plane_visualization",
+                                    Qt.ConnectionType.QueuedConnection,
+                                    Q_ARG(object, tracked_objects))
+
+            except socket.timeout:
+                continue
+            except Exception as e:
+                print(f"Error receiving tracked objects: {e}")
 
     def update_brake_status(self, brake_value):
         """Update brake label color and text based on brake value."""
@@ -233,6 +271,12 @@ class VideoStreamGUI(QMainWindow):
             self.video_label.setPixmap(pixmap.scaled(self.video_container.size(), 
                                                 Qt.AspectRatioMode.KeepAspectRatio))
             
+    
+    @pyqtSlot(object)
+    def update_plane_visualization(self, tracked_objects):
+        """Update plane visualization with tracked objects."""
+        if hasattr(self, 'plane_widget'):
+            self.plane_widget.update_tracked_objects(tracked_objects)
 
     def receive_video_stream(self):
         """Receive video stream from vision detector."""
@@ -308,6 +352,8 @@ class VideoStreamGUI(QMainWindow):
         self.video_socket.close()
         self.distance_socket.close()
         self.blink_timer.stop()
+        if hasattr(self, 'tracked_objects_socket'):
+            self.tracked_objects_socket.close()
         event.accept()
 
 

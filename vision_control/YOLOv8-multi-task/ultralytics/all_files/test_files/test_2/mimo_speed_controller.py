@@ -91,41 +91,116 @@ class MIMOSpeedController:
         self.csv_writer.writerow(row)
         self.log_file.flush()
 
-    def send_speeds(self, desired_speed: float, actual_speed: float) -> Optional[Tuple[float, float]]:
-        """Send desired and actual speeds to Arduino and get control outputs."""
-        try:
-            # Send both speeds
-            self.ser.write(struct.pack('f', desired_speed))
-            self.ser.write(struct.pack('f', actual_speed))
+    # def send_speeds(self, desired_speed: float, actual_speed: float) -> Optional[Tuple[float, float]]:
+    #     """Send desired and actual speeds to Arduino and get control outputs."""
+    #     try:
+    #         # Send both speeds
+    #         self.ser.write(struct.pack('f', desired_speed))
+    #         self.ser.write(struct.pack('f', actual_speed))
             
-            # Read throttle and brake outputs
-            throttle_data = self.ser.read(4)
-            brake_data = self.ser.read(4)
+    #         # Read throttle and brake outputs
+    #         throttle_data = self.ser.read(4)
+    #         brake_data = self.ser.read(4)
             
-            if len(throttle_data) == 4 and len(brake_data) == 4:
-                throttle = struct.unpack('f', throttle_data)[0]
-                brake = struct.unpack('f', brake_data)[0]
-                return throttle, brake
-            return None
-        except Exception as e:
-            print(f"Serial communication error: {e}")
-            return None
+    #         if len(throttle_data) == 4 and len(brake_data) == 4:
+    #             throttle = struct.unpack('f', throttle_data)[0]
+    #             brake = struct.unpack('f', brake_data)[0]
+    #             return throttle, brake
+    #         return None
+    #     except Exception as e:
+    #         print(f"Serial communication error: {e}")
+    #         return None
         
+
+    # def run_continuous(self, cruise_speed: float = 15.0):
+    #     """
+    #     Run continuous speed control with industry-standard ADAS distance management.
+    #     Implements Time Headway (THW) based approach with progressive deceleration.
+    #     """
+    #     test_start_time = time.time()
+    #     next_sample_time = time.time()
+        
+    #     # ADAS control parameters
+    #     MIN_FOLLOWING_DISTANCE = 2.0  # meters - absolute minimum safe distance
+    #     CRITICAL_TIME_HEADWAY = 1.5   # seconds - critical following time
+    #     SAFE_TIME_HEADWAY = 2.0       # seconds - comfortable following time
+    #     COMFORT_DECEL = 2.0           # m/s² - comfortable deceleration
+    #     EMERGENCY_DECEL = 3.5         # m/s² - emergency deceleration
+        
+    #     try:
+    #         print(f"\nRunning ADAS speed control (cruise speed: {cruise_speed} kph)")
+    #         print("Time(s) | Target(kph) | Actual(kph) | Throttle(%) | Brake(%) | Distance(m)")
+            
+    #         while True:
+    #             current_time = time.time()
+                
+    #             if current_time < next_sample_time:
+    #                 continue
+                    
+    #             actual_speed = self.can_handler.read_speed()
+    #             if actual_speed is None:
+    #                 continue
+                
+    #             # Convert speed to m/s for calculations
+    #             speed_ms = actual_speed / 3.6
+                
+    #             # Calculate time headway (THW)
+    #             time_headway = (self.current_distance / speed_ms) if speed_ms > 0 else float('inf')
+                
+    #             # Calculate desired speed based on time headway and distance
+    #             if self.current_distance <= MIN_FOLLOWING_DISTANCE:
+    #                 # Emergency stop condition
+    #                 desired_speed = 0
+                
+    #             elif time_headway < CRITICAL_TIME_HEADWAY:
+    #                 # Critical following distance - progressive deceleration
+    #                 decel_factor = max(0, time_headway / CRITICAL_TIME_HEADWAY)
+    #                 desired_speed = actual_speed * decel_factor
+                
+    #             elif time_headway < SAFE_TIME_HEADWAY:
+    #                 # Maintain safe following distance with smooth deceleration
+    #                 decel_factor = (time_headway - CRITICAL_TIME_HEADWAY) / (SAFE_TIME_HEADWAY - CRITICAL_TIME_HEADWAY)
+    #                 target_reduction = (1 - decel_factor) * COMFORT_DECEL
+    #                 desired_speed = max(0, actual_speed - target_reduction * 3.6)  # Convert back to km/h
+                
+    #             else:
+    #                 # Safe following distance - maintain cruise speed
+    #                 desired_speed = min(cruise_speed, 15.0)  # Limited to 30 km/h for testing
+                
+    #             # Apply control outputs
+    #             control_outputs = self.send_speeds(desired_speed, actual_speed)
+                
+    #             if control_outputs:
+    #                 throttle, brake = control_outputs
+    #                 self.send_to_gui(actual_speed, brake)
+                
+    #             self.log_data(desired_speed, actual_speed, control_outputs, test_start_time)
+                
+    #             if int(current_time * 2) > int((current_time - self.sample_time) * 2):
+    #                 print(f"\r{current_time - test_start_time:.1f} | {desired_speed:.1f} | "
+    #                     f"{actual_speed:.1f} | "
+    #                     f"{control_outputs[0]:.1f} | {control_outputs[1]:.1f} | "
+    #                     f"{self.current_distance:.1f}" if control_outputs else "NA", end="")
+                
+    #             next_sample_time = current_time + self.sample_time
+                
+    #     except KeyboardInterrupt:
+    #         print("\nTest interrupted by user")
+    #     except Exception as e:
+    #         print(f"\nError during test: {e}")
 
     def run_continuous(self, cruise_speed: float = 15.0):
         """
-        Run continuous speed control with industry-standard ADAS distance management.
-        Implements Time Headway (THW) based approach with progressive deceleration.
+        Run continuous speed control with zone-based brake control.
+        Ensures mutual exclusion between throttle and brake activation.
         """
         test_start_time = time.time()
         next_sample_time = time.time()
         
-        # ADAS control parameters
-        MIN_FOLLOWING_DISTANCE = 2.0  # meters - absolute minimum safe distance
-        CRITICAL_TIME_HEADWAY = 1.5   # seconds - critical following time
-        SAFE_TIME_HEADWAY = 2.0       # seconds - comfortable following time
-        COMFORT_DECEL = 2.0           # m/s² - comfortable deceleration
-        EMERGENCY_DECEL = 3.5         # m/s² - emergency deceleration
+        # ADAS distance control zones
+        EMERGENCY_ZONE = 2.0      # 0-2m: Emergency stop
+        CRITICAL_ZONE = 4.0       # 2-5m: Critical following
+        SAFE_ZONE = 6.0         # 5-10m: Safe following
         
         try:
             print(f"\nRunning ADAS speed control (cruise speed: {cruise_speed} kph)")
@@ -136,42 +211,43 @@ class MIMOSpeedController:
                 
                 if current_time < next_sample_time:
                     continue
-                    
+                
                 actual_speed = self.can_handler.read_speed()
                 if actual_speed is None:
                     continue
                 
-                # Convert speed to m/s for calculations
-                speed_ms = actual_speed / 3.6
+                # Initialize control commands
+                desired_speed = cruise_speed
+                brake_command = 0.0
                 
-                # Calculate time headway (THW)
-                time_headway = (self.current_distance / speed_ms) if speed_ms > 0 else float('inf')
-                
-                # Calculate desired speed based on time headway and distance
-                if self.current_distance <= MIN_FOLLOWING_DISTANCE:
-                    # Emergency stop condition
-                    desired_speed = 0
-                
-                elif time_headway < CRITICAL_TIME_HEADWAY:
-                    # Critical following distance - progressive deceleration
-                    decel_factor = max(0, time_headway / CRITICAL_TIME_HEADWAY)
-                    desired_speed = actual_speed * decel_factor
-                
-                elif time_headway < SAFE_TIME_HEADWAY:
-                    # Maintain safe following distance with smooth deceleration
-                    decel_factor = (time_headway - CRITICAL_TIME_HEADWAY) / (SAFE_TIME_HEADWAY - CRITICAL_TIME_HEADWAY)
-                    target_reduction = (1 - decel_factor) * COMFORT_DECEL
-                    desired_speed = max(0, actual_speed - target_reduction * 3.6)  # Convert back to km/h
-                
+                # Determine control based on distance zones
+                # Only one control (throttle or brake) will be active at a time
+                if self.current_distance <= EMERGENCY_ZONE:
+                    # Emergency stop zone - activate brake only
+                    desired_speed = 0.0
+                    brake_command = 100.0
+                    
+                elif self.current_distance <= CRITICAL_ZONE:
+                    # Critical zone - brake with reduced pressure
+                    desired_speed = 5.0
+                    brake_command = 70.0
+                    
+                elif self.current_distance <= SAFE_ZONE:
+                    # Safe following zone - light brake
+                    desired_speed = 10.0
+                    brake_command = 30.0
+                    
                 else:
-                    # Safe following distance - maintain cruise speed
-                    desired_speed = min(cruise_speed, 15.0)  # Limited to 30 km/h for testing
+                    # Normal cruising zone - allow throttle control
+                    desired_speed = min(cruise_speed, 15.0)
+                    brake_command = 0.0
                 
-                # Apply control outputs
-                control_outputs = self.send_speeds(desired_speed, actual_speed)
+                # Apply control outputs - Arduino will handle mutual exclusion
+                control_outputs = self.send_speeds(desired_speed, actual_speed, brake_command)
                 
                 if control_outputs:
                     throttle, brake = control_outputs
+                    # Send to GUI - only one control will be non-zero
                     self.send_to_gui(actual_speed, brake)
                 
                 self.log_data(desired_speed, actual_speed, control_outputs, test_start_time)
@@ -189,56 +265,27 @@ class MIMOSpeedController:
         except Exception as e:
             print(f"\nError during test: {e}")
 
-    # def run_continuous(self, cruise_speed: float = 15.0):
-    #     test_start_time = time.time()
-    #     next_sample_time = time.time()
-        
-    #     try:
-    #         print(f"\nRunning distance-aware MIMO speed control (cruise speed: {cruise_speed} kph)")
-    #         print("Time(s) | Target(kph) | Actual(kph) | Throttle(%) | Brake(%) | Distance(m)")
+    def send_speeds(self, desired_speed: float, actual_speed: float, brake_command: float) -> Optional[Tuple[float, float]]:
+        """Send desired speed, actual speed and brake command to Arduino and get control outputs."""
+        try:
+            # Send all three values
+            self.ser.write(struct.pack('f', desired_speed))
+            self.ser.write(struct.pack('f', actual_speed))
+            self.ser.write(struct.pack('f', brake_command))
             
-    #         while True:
-    #             current_time = time.time()
-                
-    #             if current_time < next_sample_time:
-    #                 continue
-                
-    #             #desired_speed = cruise_speed if self.current_distance > 5.0 else 0.0
-    #             if 8 <= self.current_distance < 10 :
-    #                 desired_speed = 15.0;
-    #             elif 5 <=self.current_distance < 8 :
-    #                 desired_speed = 10.0;
-    #             elif 3 <= self.current_distance < 5 :
-    #                 desired_speed = 5.0
-    #             else :
-    #                 desired_speed = 0;
+            # Read throttle and brake outputs - only one will be non-zero
+            throttle_data = self.ser.read(4)
+            brake_data = self.ser.read(4)
+            
+            if len(throttle_data) == 4 and len(brake_data) == 4:
+                throttle = struct.unpack('f', throttle_data)[0]
+                brake = struct.unpack('f', brake_data)[0]
+                return throttle, brake
+            return None
+        except Exception as e:
+            print(f"Serial communication error: {e}")
+            return None
 
-    #             actual_speed = self.can_handler.read_speed()
-                
-    #             if actual_speed is None:
-    #                 continue
-                
-    #             control_outputs = self.send_speeds(desired_speed, actual_speed)
-                
-    #             if control_outputs:
-    #                 throttle, brake = control_outputs
-    #                 # Send data to GUI
-    #                 self.send_to_gui(actual_speed, brake)
-                
-    #             self.log_data(desired_speed, actual_speed, control_outputs, test_start_time)
-                
-    #             if int(current_time * 2) > int((current_time - self.sample_time) * 2):
-    #                 print(f"\r{current_time - test_start_time:.1f} | {desired_speed:.1f} | "
-    #                       f"{actual_speed:.1f} | "
-    #                       f"{control_outputs[0]:.1f} | {control_outputs[1]:.1f} | "
-    #                       f"{self.current_distance:.1f}" if control_outputs else "NA", end="")
-                
-    #             next_sample_time = current_time + self.sample_time
-                
-    #     except KeyboardInterrupt:
-    #         print("\nTest interrupted by user")
-    #     except Exception as e:
-    #         print(f"\nError during test: {e}")
 
     def _get_status_message(self, speed_stable: bool, speed_error: float, distance: float) -> str:
         """Generate status message based on current system state."""
