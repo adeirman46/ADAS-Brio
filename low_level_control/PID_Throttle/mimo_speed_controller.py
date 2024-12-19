@@ -8,7 +8,7 @@ from typing import Optional, Tuple
 from read_can import CANSpeedHandler
 
 class MIMOSpeedController:
-    def __init__(self, serial_port: str = '/dev/ttyACM2', baud_rate: int = 9600):
+    def __init__(self, serial_port: str = '/dev/ttyACM0', baud_rate: int = 9600):
         """Initialize MIMO speed controller with serial connection and CAN interface."""
         self.ser = serial.Serial(serial_port, baud_rate, timeout=1)
         time.sleep(2)  # Wait for Arduino to initialize

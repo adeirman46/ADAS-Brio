@@ -40,8 +40,8 @@ void setup() {
   setVoltage(out1Pin, currentOut1);
   setVoltage(out2Pin, currentOut2);
   
-  Serial.println("Holding idle state for 15 seconds...");
-  delay(15000);  // Hold idle state for 15 seconds
+  // Serial.println("Holding idle state for 15 seconds...");
+  // delay(15000);  // Hold idle state for 15 seconds
 }
 
 void loop() {

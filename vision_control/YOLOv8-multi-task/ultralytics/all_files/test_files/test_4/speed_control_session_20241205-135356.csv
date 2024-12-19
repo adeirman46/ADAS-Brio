@@ -1,0 +1,12 @@
+Session_Time,Test_Time,Desired_Speed,Actual_Speed,Throttle_Output,Brake_Output,Distance,Test_Number
+4.016,4.016,15.00,4.36,NA,NA,0.92,1
+8.028,8.028,0.00,4.36,NA,NA,nan,1
+12.040,12.040,15.00,4.36,NA,NA,nan,1
+16.052,16.052,15.00,4.36,NA,NA,nan,1
+20.063,20.063,15.00,4.36,NA,NA,nan,1
+24.075,24.074,15.00,4.36,NA,NA,3.46,1
+28.086,28.086,15.00,4.36,NA,NA,nan,1
+32.099,32.099,15.00,4.36,NA,NA,nan,1
+36.110,36.110,15.00,4.28,NA,NA,nan,1
+40.123,40.122,15.00,4.28,NA,NA,nan,1
+44.134,44.134,15.00,4.28,NA,NA,nan,1
