@@ -1,0 +1,32 @@
+names:
+- bus_stop
+- do_not_enter
+- do_not_stop
+- do_not_turn_l
+- do_not_turn_r
+- do_not_u_turn
+- enter_left_lane
+- green_light
+- left_righ_lane
+- no parking
+- parking
+- ped_crossing
+- ped_zebra_cross
+- railway_crossing
+- red_light
+- stop
+- t_intersection_l
+- traffic_light
+- u_turn
+- warning
+- yellow_light
+nc: 21
+roboflow:
+  license: CC BY 4.0
+  project: traffic-sign-recognition-hztr5
+  url: https://universe.roboflow.com/traffic-sign-recognition-u8bso/traffic-sign-recognition-hztr5/dataset/2
+  version: 2
+  workspace: traffic-sign-recognition-u8bso
+test: ../test/images
+train: ../train/images
+val: ../valid/images

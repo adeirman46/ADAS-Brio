@@ -1,0 +1,104 @@
+// Create a union to easily convert float to byte
+typedef union {
+  float number;
+  uint8_t bytes[4];
+} FLOATUNION_t;
+
+// State space dimensions
+const int N_STATES = 4;
+
+// State feedback gain K (from K_new in MATLAB)
+const float K[N_STATES] = {-5726.8, -1335.3, -3887.8, -1274.7};
+
+// Observer gain Ke (transposed from MATLAB)
+const float Ke[N_STATES] = {-0.2515e5, -1.8318e5, 60, 1810};
+
+// System matrices (from MATLAB)
+const float A[N_STATES][N_STATES] = {
+  {0, 1, 0, 0},
+  {10.78, 0, 0, 0},
+  {0, 0, 0, 1},
+  {-0.98, 0, 0, 0}
+};
+
+// State variables
+float x_hat[N_STATES] = {0, 0, 0, 0};  // Observer state estimate
+float u = 0;                            // Control input
+unsigned long previousTime = 0;
+
+void setup() {
+  Serial.begin(115200);
+  while (!Serial) {
+    ; // wait for serial port to connect
+  }
+  previousTime = millis();
+}
+
+void loop() {
+  if (Serial.available() >= 4) {
+    // Read measured position (y) from Simulink
+    float y = getFloat();
+    
+    // Calculate time step
+    unsigned long currentTime = millis();
+    float dt = (currentTime - previousTime) / 1000.0; // Convert to seconds
+    
+    // Update observer state estimate
+    float y_hat = x_hat[2]; // C2 matrix: measuring position (state 3)
+    float innovation = y - y_hat;
+    
+    // Observer prediction
+    float x_hat_new[N_STATES] = {0, 0, 0, 0};
+    
+    // x_hat_dot = Ax_hat + Bu + Ke(y - Cx_hat)
+    for(int i = 0; i < N_STATES; i++) {
+      // Ax_hat term
+      for(int j = 0; j < N_STATES; j++) {
+        x_hat_new[i] += A[i][j] * x_hat[j];
+      }
+      // Bu term
+      if(i == 1) x_hat_new[i] += -u;  // B matrix has -1 at index 1
+      if(i == 3) x_hat_new[i] += u;   // B matrix has 1 at index 3
+      // Ke(y - Cx_hat) term
+      x_hat_new[i] += Ke[i] * innovation;
+    }
+    
+    // Euler integration
+    for(int i = 0; i < N_STATES; i++) {
+      x_hat[i] += x_hat_new[i] * dt;
+    }
+    
+    // Calculate control input u = -Kx
+    u = 0;
+    for(int i = 0; i < N_STATES; i++) {
+      u -= K[i] * x_hat[i];
+    }
+    
+    // Send control input back to Simulink
+    sendFloat(u);
+    
+    previousTime = currentTime;
+  }
+}
+
+// Function to get float from serial
+float getFloat() {
+  int cont = 0;
+  FLOATUNION_t f;
+  while (cont < 4 && Serial.available() > 0) {
+    f.bytes[cont] = Serial.read();
+    cont++;
+  }
+  return f.number;
+}
+
+// Function to send float to serial
+void sendFloat(float value) {
+  FLOATUNION_t f;
+  f.number = value;
+  Serial.write('A');
+  for (int i = 0; i < 4; i++) {
+    Serial.write(f.bytes[i]);
+  }
+  Serial.print('\n');
+}
