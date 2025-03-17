@@ -77,8 +77,8 @@ class PlaneVisualizationWidget(QWidget):
             # Add directional arrow
             painter.setPen(QPen(Qt.GlobalColor.white, 2))
             arrow_size = width * 0.4
-            painter.drawLine(0, -arrow_size, 0, arrow_size)
-            painter.drawLine(-arrow_size, 0, arrow_size, 0)
+            painter.drawLine(0, int(-arrow_size), 0, int(arrow_size))
+            painter.drawLine(int(-arrow_size), 0, int(arrow_size), 0)
         
         painter.restore()
 
@@ -126,24 +126,26 @@ class PlaneVisualizationWidget(QWidget):
         painter.setPen(self.grid_pen)
         for i in range(self.max_length + 1):
             y = i * grid_spacing_y
-            painter.drawLine(-width/2, y, width/2, y)
+            # painter.drawLine(-width/2, y, width/2, y)
+            painter.drawLine(int(-width / 2), int(y), int(width / 2), int(y))
+
             
             # Draw distance markers
             painter.save()
             painter.scale(1, -1)  # Flip back for text
             painter.setPen(self.axis_color)
-            painter.drawText(-width/2 + 10, -y + 15, f"{i}m")
+            painter.drawText(int(-width/2 + 10), int(-y + 15), f"{i}m")
             painter.restore()
         
         # Draw vertical grid lines
         for i in range(-self.max_width, self.max_width + 1):
             x = i * grid_spacing_x
-            painter.drawLine(x, 0, x, height)
+            painter.drawLine(int(x), 0, int(x), int(height))
         
         # Draw main axes with thicker lines
         painter.setPen(self.axis_pen)
-        painter.drawLine(0, 0, 0, height)  # Y axis
-        painter.drawLine(-width/2, 0, width/2, 0)  # X axis
+        painter.drawLine(0, 0, 0, int(height))  # Y axis
+        painter.drawLine(int(-width/2), 0, int(width/2), 0)  # X axis
         
         painter.restore()
 
