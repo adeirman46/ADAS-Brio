@@ -169,10 +169,10 @@ class WaypointExtractor:
             # Draw point
             cv2.circle(vis_img, (int(wp.x), int(wp.y)), 5, color, -1)
             
-            # Draw distance text with actual depth value
-            cv2.putText(vis_img, f'{wp.distance:.2f}m', 
-                       (int(wp.x) + 10, int(wp.y)), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            # # Draw distance text with actual depth value
+            # cv2.putText(vis_img, f'{wp.distance:.2f}m', 
+            #            (int(wp.x) + 10, int(wp.y)), 
+            #            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
             
             # Draw heading arrow if available
             if wp.heading is not None:

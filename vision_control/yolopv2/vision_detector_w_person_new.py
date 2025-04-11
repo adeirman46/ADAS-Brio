@@ -229,7 +229,7 @@ def detect():
     person_model.overrides['classes'] = [0, 2, 4]  # Class 0 is person in COCO dataset
 
     # Initialize waypoint extractor
-    waypoint_extractor = WaypointExtractor(num_points=6)
+    waypoint_extractor = WaypointExtractor(num_points=20)
     
     half = device.type != 'cpu'
     if half:
