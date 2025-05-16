@@ -334,24 +334,24 @@ def detect():
                 
                 da_seg_mask = driving_area_mask(seg).astype(np.uint8)
 
-                # Extract and visualize waypoints
-                waypoints = waypoint_extractor.extract_waypoints(
-                    da_seg_mask, 
-                    depth,
-                    im0.shape[0],
-                    im0.shape[1]
-                )
+                # # Extract and visualize waypoints
+                # waypoints = waypoint_extractor.extract_waypoints(
+                #     da_seg_mask, 
+                #     depth,
+                #     im0.shape[0],
+                #     im0.shape[1]
+                # )
 
-                # Visualize waypoints on the result image
-                result_img = waypoint_extractor.visualize_waypoints(result_img, waypoints)
+                # # Visualize waypoints on the result image
+                # result_img = waypoint_extractor.visualize_waypoints(result_img, waypoints)
 
                 ll_seg_mask = lane_line_mask(ll).astype(np.uint8)
 
-                # Calculate lane distances
-                left_dist, right_dist = calculate_lane_distances(da_seg_mask, ll_seg_mask, im0.shape[1])
+                # # Calculate lane distances
+                # left_dist, right_dist = calculate_lane_distances(da_seg_mask, ll_seg_mask, im0.shape[1])
 
-                # Visualize the distances
-                result_img = visualize_lane_distances(result_img, left_dist, right_dist)
+                # # Visualize the distances
+                # result_img = visualize_lane_distances(result_img, left_dist, right_dist)
                 
                 da_seg_mask = cv2.resize(da_seg_mask, (im0.shape[1], im0.shape[0]), 
                                        interpolation=cv2.INTER_NEAREST)

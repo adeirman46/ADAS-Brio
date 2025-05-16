@@ -1,7 +1,7 @@
 #include <Arduino.h>
 
-const int out1Pin = D5; // DAC1
-const int out2Pin = D6; // DAC2
+const int out1Pin = PB10; // DAC1
+const int out2Pin = PB4; // DAC2
 
 // Target voltages for idle and max states
 const float idleOut1 = 1.0;  // 1V
