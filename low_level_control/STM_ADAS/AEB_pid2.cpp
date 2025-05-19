@@ -57,7 +57,7 @@ void setThrottle(float throttle_percent) {
     setVoltage(THROTTLE_OUT2, currentOut2);
 }
 
-// Function to set brake position (0-100%)
+// Function to set brake position (0-100%) 
 void setBrake(float brake_percent) {
     brake_percent = constrain(brake_percent, 0, 100);
     int angle = map(brake_percent, 0, 100, BRAKE_RELEASED, BRAKE_PRESSED);

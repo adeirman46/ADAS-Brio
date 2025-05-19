@@ -6,8 +6,8 @@ const int ADC_MAX = 1023;            // 10-bit ADC max value
 const int ADC_CENTER = 530;          // Center position
 
 // Scaling factors for steering angle
-const float degrees_per_adc_ccw = 90.0 / 40.0; // ≈2.045 deg/ADC for counterclockwise
-const float degrees_per_adc_cw = 90.0 / 40.0;  // 2.5 deg/ADC for clockwise
+const float degrees_per_adc_ccw = 90.0 / 40.0; // 2.25 deg/ADC for counterclockwise
+const float degrees_per_adc_cw = 90.0 / 40.0;  // 2.25 deg/ADC for clockwise
 
 // IIR Filter parameters
 const float Wc = 2.8629; // Cutoff frequency in rad/s

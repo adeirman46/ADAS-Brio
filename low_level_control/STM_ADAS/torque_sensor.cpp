@@ -11,17 +11,22 @@
 // Mode Kontrol
 bool manualMode = true; // Default: Manual Mode
 
-// Nilai idle state 2.5V pada resolusi 12-bit (2.5V / 3.3V * 4095)
-#define IDLE_STATE 3100
+// Nilai idle state 2.5V pada resolusi 10-bit (2.5V / 3.3V * 1023)
+#define IDLE_STATE 775
 
 // Variabel tegangan untuk mode keyboard
 float voltage1 = 2.5;
 float voltage2 = 2.5;
 
+// Variabel untuk smoothing di manual mode
+static float smoothed_val1 = IDLE_STATE;
+static float smoothed_val2 = IDLE_STATE;
+const float alpha = 0.04; // Faktor smoothing (0–1, kecil = lebih halus)
+
 void setup() {
     Serial.begin(9600);
-    analogReadResolution(12); // Mengatur resolusi ADC ke 12-bit
-    analogWriteResolution(12); // Mengatur resolusi DAC ke 12-bit
+    analogReadResolution(10); // Resolusi ADC ke 10-bit
+    analogWriteResolution(10); // Resolusi DAC ke 10-bit
     
     // Set DAC ke idle state awal
     analogWrite(DAC1, IDLE_STATE);
@@ -37,13 +42,10 @@ void loop() {
         
         if (input == 'm' || input == 'M') {
             manualMode = !manualMode;
-            
-            // Reset voltage saat beralih ke mode keyboard
             if (!manualMode) {
                 voltage1 = 2.5;
                 voltage2 = 2.5;
             }
-            
             Serial.print("Mode: ");
             Serial.println(manualMode ? "Manual" : "Keyboard");
         }
@@ -60,12 +62,10 @@ void loop() {
                     voltage2 += 0.1;
                 }
             }
+            // Set DAC dalam mode keyboard (10-bit)
+            analogWrite(DAC1, (voltage1 / 3.3) * 1023);
+            analogWrite(DAC2, (voltage2 / 3.3) * 1023);
             
-            // Set DAC dalam mode keyboard
-            analogWrite(DAC1, (voltage1 / 3.3) * 4095);
-            analogWrite(DAC2, (voltage2 / 3.3) * 4095);
-            
-            // Print status
             Serial.print("DAC Output - PA4: ");
             Serial.print(voltage1, 2);
             Serial.print("V, PA5: ");
@@ -75,13 +75,16 @@ void loop() {
     }
     
     if (manualMode) {
-        // Membaca nilai analog (0 - 4095)
-        int val1 = analogRead(ANALOG1);
+        int val1 = analogRead(ANALOG1); // 0–1023
         int val2 = analogRead(ANALOG2);
         
-        // Mengatur DAC berdasarkan nilai ADC
-        analogWrite(DAC1, val1 > 0 ? val1 : IDLE_STATE);
-        analogWrite(DAC2, val2 > 0 ? val2 : IDLE_STATE);
+        // Terapkan low-pass filter
+        smoothed_val1 = (1 - alpha) * smoothed_val1 + alpha * val1;
+        smoothed_val2 = (1 - alpha) * smoothed_val2 + alpha * val2;
+        
+        // Tulis ke DAC
+        analogWrite(DAC1, val1 > 0 ? (int)smoothed_val1 : IDLE_STATE);
+        analogWrite(DAC2, val2 > 0 ? (int)smoothed_val2 : IDLE_STATE);
     }
     
     delay(10);
