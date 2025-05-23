@@ -101,7 +101,6 @@ void loop() {
         Serial.print(filtered_distance);
         Serial.print(",");
         Serial.println(brake_percent);
-        
         delay(100); // Delay for readability
     }
 }

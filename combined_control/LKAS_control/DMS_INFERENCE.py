@@ -29,7 +29,7 @@ class DMSInference:
         self.HEAD_POSE_THRESHOLD = 35
         
         # Initialize camera
-        self.cap = cv2.VideoCapture(3)
+        self.cap = cv2.VideoCapture(0)
         if not self.cap.isOpened():
             raise RuntimeError("Error: Could not open camera")
         
